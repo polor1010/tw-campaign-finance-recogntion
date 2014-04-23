@@ -4,6 +4,8 @@
 2. 文字定位
 3. 辨識(未完成)
 
+辨識結果 https://www.dropbox.com/s/0dlkiyik1s6ypqb/WordExtract.zip
+
 Qt Gui
 
 授權方式 MIT: http://g0v.mit-license.org
