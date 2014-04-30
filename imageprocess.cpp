@@ -1,24 +1,96 @@
 #include "imageprocess.h"
 #include <QDebug>
 
-#define MIN_CAHR_SIZE 80
+
+
+/**
+     * 將 buffer 做 chamfer distance transform (white foreground black background)
+     *
+     * @param unsigned char *buffer8
+     * @param int   width
+     * @param int   height
+     * @param unsigned char *resultBuffer8
+     * @param int threshold
+     * @param int maxValue
+     * @param int minValue
+     * @return void
+     */
+void ImageProcess::chamferDistance(unsigned char *buffer8, int width, int height, unsigned char *resultBuffer8, int threshold, int maxValue, int minValue)
+{
+    unsigned char *pResultBuffer8;
+    int i, j,
+        value,
+        imageSize = height * width;
+
+    memset(resultBuffer8, 0, sizeof(unsigned char) * imageSize);
+
+    for( i = 0 ; i < imageSize ; i++ )
+    {
+        if( buffer8[i] <= threshold )
+            resultBuffer8[i] = 255;
+    }
+
+    pResultBuffer8 = resultBuffer8 + width;
+    for( i = 1 ; i < height ; i++, pResultBuffer8 += width )
+    {
+        for( j = 1 ; j < width - 1 ; j++ )
+        {
+            value = 255;
+
+            if(value > pResultBuffer8[j])							value = pResultBuffer8[j];
+            if(value > pResultBuffer8[j - 1] + minValue)				value = pResultBuffer8[j - 1] + minValue;
+            if(value > pResultBuffer8[-width + j - 1] + maxValue)		value = pResultBuffer8[-width + j - 1] + maxValue;
+            if(value > pResultBuffer8[-width + j] + minValue)			value = pResultBuffer8[-width + j] + minValue;
+            if(value > pResultBuffer8[-width + j + 1] + maxValue)		value = pResultBuffer8[-width + j + 1] + maxValue;
+
+            pResultBuffer8[j] = value;
+        }
+    }
+
+    pResultBuffer8 = resultBuffer8 + ((height - 2) * width);
+    for( i = height-1 ; i > 0 ; i--, pResultBuffer8 -= width )
+    {
+        for( j = width - 2 ; j > 0 ; j-- )
+        {
+            value = 255;
+
+            if(value > pResultBuffer8[j])							value = pResultBuffer8[j];
+            if(value > pResultBuffer8[j + 1] + minValue)				value = pResultBuffer8[j + 1] + minValue;
+            if(value > pResultBuffer8[width + j + 1] + maxValue)		value = pResultBuffer8[width + j + 1] + maxValue;
+            if(value > pResultBuffer8[width + j] + minValue)			value = pResultBuffer8[width + j] + minValue;
+            if(value > pResultBuffer8[width + j - 1] + maxValue)		value = pResultBuffer8[width + j - 1] + maxValue;
+
+            pResultBuffer8[j] = value;
+        }
+    }
+
+    pResultBuffer8 = resultBuffer8;
+    for( i = 0 ; i < height ; i++ , pResultBuffer8 += width )
+        pResultBuffer8[0] = pResultBuffer8[width - 1] = 255;
+
+    pResultBuffer8 = resultBuffer8 + (height - 1) * width;
+    for( i = 0 ; i < width ; i++ )
+        pResultBuffer8[i] = resultBuffer8[i] = 255;
+
+}
+
 
 /**
      * 將 32bit ARGB 影像轉換成 8 bits 灰階影像
      *
-     * @param uchar *buffer32
+     * @param unsigned char *buffer32
      * @param int   width
      * @param int   height
      * @param int   widthEff
-     * @param uchar buffer8
+     * @param unsigned char *buffer8
      * @return void
      */
-void trans2Gray(uchar *buffer32 , int width , int height, int widthEff , uchar *buffer8 )
+void ImageProcess::trans2Gray(unsigned char *buffer32 , int width , int height, int widthEff , unsigned char *buffer8 )
 {
     int x,y,k;
 
-    uchar *pBuffer32 = buffer32;
-    uchar *pBuffer8 = buffer8;
+    unsigned char *pBuffer32 = buffer32;
+    unsigned char *pBuffer8 = buffer8;
 
     for( y = 0 ; y < height ; y++ , pBuffer32 += widthEff , pBuffer8 += width )
     {
@@ -33,19 +105,19 @@ void trans2Gray(uchar *buffer32 , int width , int height, int widthEff , uchar *
 /**
      * 將 8 bits 灰階影像轉換成 32bit ARGB 影像
      *
-     * @param uchar *buffer8
+     * @param unsigned char *buffer8
      * @param int   width
      * @param int   height
      * @param int   widthEff
-     * @param uchar *buffer32
+     * @param unsigned char *buffer32
      * @return void
      */
-void trans2RGB(uchar *buffer8 , int width , int height, int widthEff , uchar *buffer32 )
+void ImageProcess::trans2RGB(unsigned char *buffer8 , int width , int height, int widthEff , unsigned char *buffer32 )
 {
     int x,y,k;
 
-    uchar *pBuffer32 = buffer32;
-    uchar *pBuffer8 = buffer8;
+    unsigned char *pBuffer32 = buffer32;
+    unsigned char *pBuffer8 = buffer8;
 
     for( y = 0 ; y < height ; y++ , pBuffer32 += widthEff , pBuffer8 += width )
     {
@@ -60,21 +132,21 @@ void trans2RGB(uchar *buffer8 , int width , int height, int widthEff , uchar *bu
 /**
      * 移除背景 noise
      *
-     * @param uchar *buffer8
+     * @param unsigned char *buffer8
      * @param int   width
      * @param int   height
      * @return void
      */
-void noiseRemove(uchar *buffer8 , int width , int height )
+void ImageProcess::noiseRemove(unsigned char *buffer8 , int width , int height )
 {
     int x,y;
 
-    uchar *bufferTemp = new uchar[width*height];
+    unsigned char *bufferTemp = new unsigned char[width*height];
 
-    memcpy(bufferTemp,buffer8,sizeof(uchar)*width*height);
+    memcpy(bufferTemp,buffer8,sizeof(unsigned char)*width*height);
 
-    uchar *pBuffer8 = buffer8 + width + 1;
-    uchar *pBufferTemp = bufferTemp + width + 1;
+    unsigned char *pBuffer8 = buffer8 + width + 1;
+    unsigned char *pBufferTemp = bufferTemp + width + 1;
 
     for( y = 1 ; y < height - 1; y++ ,  pBuffer8 += width , pBufferTemp += width)
     {
@@ -94,18 +166,18 @@ void noiseRemove(uchar *buffer8 , int width , int height )
         }
     }
 
-     memcpy(buffer8,bufferTemp,sizeof(uchar)*width*height);
+     memcpy(buffer8,bufferTemp,sizeof(unsigned char)*width*height);
 }
 
 /**
      * 將最大的面積 region 外的黑點移除
      *
-     * @param uchar *buffer8
+     * @param unsigned char *buffer8
      * @param int   width
      * @param int   height
      * @return void
      */
-void getMaxRegion(uchar *buffer8 , int width , int height )
+void ImageProcess::getMaxRegion(unsigned char *buffer8 , int width , int height )
 {
     int y,x;
     //get max size region
@@ -118,7 +190,7 @@ void getMaxRegion(uchar *buffer8 , int width , int height )
         bufferINT8[i] = buffer8[i];
     }
 
-    regionList = ConnectedComponent(bufferINT8,width,height);
+    regionList = connectedComponent(bufferINT8,width,height);
 
     int maxValue = -1;
     int label = -1;
@@ -136,7 +208,7 @@ void getMaxRegion(uchar *buffer8 , int width , int height )
     //qDebug() << index <<maxValue;
     //qDebug() << regions[index].top << regions[index].bottom;
 
-    uchar *pBuffer8 = buffer8;
+    unsigned char *pBuffer8 = buffer8;
 
     for( y = 0 ; y < height ; y++ , pBuffer8 += width )
     {
@@ -152,14 +224,14 @@ void getMaxRegion(uchar *buffer8 , int width , int height )
 }
 
 /**
-     * 將最大的面積 region 外的黑點移除
+     * 記錄文字位置, 如果文字 寬度>高度 則認定為非文字
      *
-     * @param uchar *buffer8
+     * @param unsigned char *buffer8
      * @param int   width
      * @param int   height
      * @return vector<REGION_ENTRY> 記錄文字位置的 region vector
      */
-vector<REGION_ENTRY> getCharPosition( uchar *buffer8 , int width , int height )
+vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int width , int height )
 {
    vector<REGION_ENTRY> charPositions;
     int i;
@@ -170,7 +242,7 @@ vector<REGION_ENTRY> getCharPosition( uchar *buffer8 , int width , int height )
         bufferINT8[i] = 255 - buffer8[i];
     }
 
-    charPositions = ConnectedComponent(bufferINT8,width,height,MIN_CAHR_SIZE);
+    charPositions = connectedComponent(bufferINT8,width,height,MIN_CAHR_SIZE);
 
     for( i = 0 ; i < charPositions.size() ; i++ )
     {
@@ -197,7 +269,7 @@ vector<REGION_ENTRY> getCharPosition( uchar *buffer8 , int width , int height )
      * @param int   minSize
      * @return vector<REGION_ENTRY> 記錄每個 group 資訊的 vector
      */
-vector<REGION_ENTRY> ConnectedComponent(int *buffer8, int width, int height, int minSize )
+vector<REGION_ENTRY> ImageProcess::connectedComponent(int *buffer8, int width, int height, int minSize )
 {
     vector<REGION_ENTRY> regionList;
     int	i, j, k,index = 1;
@@ -234,20 +306,20 @@ vector<REGION_ENTRY> ConnectedComponent(int *buffer8, int width, int height, int
                 if(a)
                 {
                     pBufferTemp[j] = a;
-                    if(b && a != b) Union(a, b, parent);
-                    if(c && a != c) Union(a, c, parent);
-                    if(d && a != d) Union(a, d, parent);
+                    if(b && a != b) connectedUnion(a, b, parent);
+                    if(c && a != c) connectedUnion(a, c, parent);
+                    if(d && a != d) connectedUnion(a, d, parent);
                 }
                 else if(b)
                 {
                     pBufferTemp[j] = b;
-                    if(c && b != c) Union(b, c, parent);
-                    if(d && b != d) Union(b, d, parent);
+                    if(c && b != c) connectedUnion(b, c, parent);
+                    if(d && b != d) connectedUnion(b, d, parent);
                 }
                 else if(c)
                 {
                     pBufferTemp[j] = c;
-                    if(d && c != d) Union(c, d, parent);
+                    if(d && c != d) connectedUnion(c, d, parent);
                 }
                 else if(d != 0)
                     pBufferTemp[j] = d;
@@ -290,15 +362,15 @@ vector<REGION_ENTRY> ConnectedComponent(int *buffer8, int width, int height, int
     index = k;
 
     if( index > 1 )
-        SecondPass(bufferTemp ,  width ,  height , index , parent,  regionList , minSize );
+        secondPass(bufferTemp ,  width ,  height , index , parent,  regionList , minSize );
 
-    delete [] bufferTemp;
-    delete [] parent;
+    SAFE_RELEASE(bufferTemp);
+    SAFE_RELEASE(parent);
 
     return regionList;
 }
 
-void SecondPass(int *bufferINT , int width , int height , int labelCounter , int *parent,  vector<REGION_ENTRY> &regionList , int minSize )
+void ImageProcess::secondPass(int *bufferINT , int width , int height , int labelCounter , int *parent,  vector<REGION_ENTRY> &regionList , int minSize )
 {
     int i,j,k;
     int *counter = new int[labelCounter];
@@ -385,11 +457,11 @@ void SecondPass(int *bufferINT , int width , int height , int labelCounter , int
         regionList.at(k).cy /= regionList.at(k).size;
     }
 
-    if(counter)
-    delete [] counter;
+
+    SAFE_RELEASE(counter);
 }
 
-void Union(int x, int y, int *p)
+void ImageProcess::connectedUnion(int x, int y, int *p)
 {
     int j = x,
         k = y;

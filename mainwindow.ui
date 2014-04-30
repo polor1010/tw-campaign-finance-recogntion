@@ -14,7 +14,7 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <widget class="QPushButton" name="pushButton_Open">
+   <widget class="QPushButton" name="pushButton_Image">
     <property name="geometry">
      <rect>
       <x>280</x>
@@ -24,10 +24,10 @@
      </rect>
     </property>
     <property name="text">
-     <string>Open</string>
+     <string>Region Image</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="pushButton_Process">
+   <widget class="QPushButton" name="pushButton_Folder">
     <property name="geometry">
      <rect>
       <x>280</x>
@@ -37,10 +37,10 @@
      </rect>
     </property>
     <property name="text">
-     <string>Process</string>
+     <string>Folder</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="pushButton_Folder">
+   <widget class="QPushButton" name="pushButton_Json">
     <property name="geometry">
      <rect>
       <x>280</x>
@@ -50,7 +50,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Folder</string>
+     <string>Image(json)</string>
     </property>
    </widget>
   </widget>
@@ -78,29 +78,13 @@
  <resources/>
  <connections>
   <connection>
-   <sender>pushButton_Open</sender>
+   <sender>pushButton_Image</sender>
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
-   <slot>openImage()</slot>
+   <slot>processRegionImage()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>56</x>
-     <y>50</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>199</x>
-     <y>149</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>pushButton_Process</sender>
-   <signal>clicked()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>processImage()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>166</x>
      <y>50</y>
     </hint>
     <hint type="destinationlabel">
@@ -114,6 +98,22 @@
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
    <slot>getFolderFiles()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>336</x>
+     <y>110</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>165</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_Json</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>processImage()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>336</x>

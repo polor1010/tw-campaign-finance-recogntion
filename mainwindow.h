@@ -2,10 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QString>
-#include "imageprocess.h"
-
-using namespace std;
+#include "regionrecognition.h"
 
 namespace Ui {
 class MainWindow;
@@ -22,15 +19,18 @@ public:
 
 private:
     Ui::MainWindow *ui;
+
     QString filePath;
-    bool isloadImage;
+    QString jSonFilePath;
+    bool isLoadImage;
     QImage image;
-    vector<REGION_ENTRY> charPositions;
+    RegionRecognition regionRecognition;
 
 public slots:
-    void openImage();
     void processImage();
+    void processRegionImage();
     void getFolderFiles();
+
 };
 
 

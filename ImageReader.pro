@@ -8,15 +8,20 @@ QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = ImageReader
+CONFIG-=app_bundle
+TARGET = CharRecognition
 TEMPLATE = app
 
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    imageprocess.cpp
+    imageprocess.cpp \
+    regionrecognition.cpp
 
 HEADERS  += mainwindow.h \
-    imageprocess.h
+    imageprocess.h \
+    regionrecognition.h
 
 FORMS    += mainwindow.ui
+
+OTHER_FILES +=
