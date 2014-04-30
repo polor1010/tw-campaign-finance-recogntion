@@ -7,6 +7,7 @@
 執行方法
 1. 執行檔要和 database 資料夾放在同一個路徑
 2. ./CharRecognition 'imagePath' 'jsonPath' 'outJsonPath'
+ 
 
 測試檔案和辨識結果
 https://www.dropbox.com/s/33q9qnjnwbt1loj/test.zip
