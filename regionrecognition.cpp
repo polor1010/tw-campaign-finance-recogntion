@@ -179,8 +179,9 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
                 tableRegions.at(i).result = processImage(regionImage);
 
 #ifdef DEBUG_SAVE_IMAGE
-            drawInfo(regionImage);
             static int counter = 0;
+
+            drawInfo(regionImage);
             QPainter painter;
             painter.begin(&regionImage);
             painter.setPen(QPen(QColor(Qt::red)));
@@ -347,7 +348,20 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
 
      SAFE_RELEASE(buffer8);
 
+
+     return sortCharPosition();
+ }
+
+ /**
+      * 將 charPositions 裡的文字從左到右排序, 並回傳結果
+      *
+      * @return QString 文字排序結果
+      */
+ QString RegionRecognition::sortCharPosition()
+ {
      int i,j;
+
+     QString result;
      for( i = 0 ; i < charPositions.size() ; i++ )
      {
          for( j = i ; j < charPositions.size() ; j++ )
@@ -361,18 +375,6 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
          }
      }
 
-     return sortCharPosition();
- }
-
- /**
-      * 將 charPositions 裡的文字從左到右排序, 並回傳結果
-      *
-      * @return QString 文字排序結果
-      */
- QString RegionRecognition::sortCharPosition()
- {
-     int i;
-     QString result;
      for( i = 0 ; i < charPositions.size() ; i++ )
      {
          if( charPositions.at(i).IsRegion )

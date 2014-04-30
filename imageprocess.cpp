@@ -242,7 +242,7 @@ vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int
         bufferINT8[i] = 255 - buffer8[i];
     }
 
-    charPositions = connectedComponent(bufferINT8,width,height,MIN_CAHR_SIZE);
+    charPositions = connectedComponent(bufferINT8,width,height,height*height/110);//110為大約估算值,沒意義
 
     for( i = 0 ; i < charPositions.size() ; i++ )
     {
@@ -254,7 +254,7 @@ vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int
                 charPositions.at(i).IsRegion = false;
             }
 
-        //qDebug() << i << charPositions.at(i).IsRegion << charPositions.at(i).size;
+            //qDebug() << i << charPositions.at(i).IsRegion << charPositions.at(i).size << width * height;
     }
 
     return charPositions;
