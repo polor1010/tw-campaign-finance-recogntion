@@ -34,6 +34,7 @@ public:
     void writeJsonFile(QString filePath);
     bool getRegionRecognitions(QString filePath);
 
+    QString processImageChinese(QImage &image);
     QString processImage(QImage image);
     void drawInfo(QImage &image);
 
@@ -52,6 +53,7 @@ private:
     vector<TABLE_REGION> tableRegions;
     QImage image;
     bool isLoadDataBase;
+    bool isInverse;
 
 };
 

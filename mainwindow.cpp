@@ -72,12 +72,12 @@ void MainWindow::processRegionImage()
     qDebug() << image.bytesPerLine();
     qDebug() << image.bitPlaneCount();
 
-    regionRecognition.processImage(image);
+    regionRecognition.processImageChinese(image);
 
     regionRecognition.drawInfo(image);
     //int fileNameLength = filePath.length();
     //qDebug()<<filePath.insert(fileNameLength-4,"_R");
-    image.save(filePath);
+    //image.save(filePath);
 
     //saveRegions();
     update();

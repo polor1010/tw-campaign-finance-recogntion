@@ -13,6 +13,7 @@
 
 RegionRecognition::RegionRecognition()
 {
+    isInverse = 0;
     isLoadDataBase = loadPatterns();
 }
 /**
@@ -83,9 +84,15 @@ bool RegionRecognition::readJsonFile(QString filePath)
 
     QJsonObject root = conetentAll.value(QString("data")).toObject();
     //qDebug() <<"parser " << root;
-    //QJsonObject imageFile = root.value(QString("file")).toObject();
+    QJsonObject imageFile = root.value(QString("meta")).toObject();
+    //qDebug() << imageFile;
     //int width = imageFile.value(QString("pic_width")).toInt();
     //int height = imageFile.value(QString("pic_height")).toInt();
+    //qDebug() << imageFile.value(QString("pic_height")).toString();
+    //qDebug() << imageFile.value(QString("reverse")).toInt();
+    isInverse = imageFile.value(QString("reverse")).toInt();
+    //qDebug() << "isInverse" << isInverse;
+
 
     QJsonArray table = root.value(QString("tables")).toArray();
 
@@ -140,6 +147,7 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
         return false;
     }
 
+
     unsigned char *buffer24 = image.bits();
 
     int x,y,k,i;
@@ -153,11 +161,19 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
         int height = abs(tableRegions.at(i).top-tableRegions.at(i).bottom) + 1;
         int posX = tableRegions.at(i).left;
         int posY = tableRegions.at(i).top;
+
+        if( isInverse )
+        {
+            tableRegions.at(i).column = 9 - tableRegions.at(i).column + 1;
+            tableRegions.at(i).row = 21 - tableRegions.at(i).row + 1;
+        }
+
         int column = tableRegions.at(i).column;
         int row = tableRegions.at(i).row;
 
         //只辨識 row 0:序號 1:日期 6:支出金額
         if( row > 1  && (column == 1 || column == 2 || column == 7))
+        //if( row > 1  && (column == 4))
         {
             QImage regionImage = QImage(width,height,QImage::Format_ARGB32);
             unsigned char *regionBuffer = regionImage.bits();
@@ -175,12 +191,19 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
                 }
             }
 
+            if( isInverse )
+            {
+                QMatrix matrix;
+                matrix.rotate(180);
+                regionImage = regionImage.transformed(matrix);
+            }
+
             if( patterns.size() > 0 )
                 tableRegions.at(i).result = processImage(regionImage);
 
 #ifdef DEBUG_SAVE_IMAGE
             static int counter = 0;
-
+/**/
             drawInfo(regionImage);
             QPainter painter;
             painter.begin(&regionImage);
@@ -188,7 +211,8 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
             painter.drawText(10,15,tableRegions.at(i).result);
             painter.end();
 
-            QString filePath = QDir::currentPath() + "/"+QString::number(counter) + QString::number(row)+QString::number(column)+".jpg";
+            //QString::number(counter) +
+            QString filePath = QDir::currentPath() + "/"+ QString::number(row)+"_"+QString::number(column)+".jpg";
             qDebug() << filePath;
             regionImage.save(filePath);
             counter++;
@@ -313,6 +337,44 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
          }
      }
 
+ }
+
+ /**
+      * 輸入 region 影像並作辨識
+      *
+      * @param QImage image
+      * @return QString 辨識結果
+      */
+ QString RegionRecognition::processImageChinese(QImage &image)
+ {
+     charPositions.clear();
+     //isSpace = false;
+
+
+     int height = image.height();
+     int width = image.width();
+     int widthEff = image.bytesPerLine();
+ qDebug() << widthEff << width;
+     unsigned char *pBuffer = image.bits();
+
+     unsigned char *buffer8 = new uchar[width*height];
+     memset(buffer8,0,sizeof(uchar)*width*height);
+
+     trans2Gray(pBuffer,width,height,widthEff,buffer8);
+     noiseRemove(buffer8,width,height);
+     noiseRemove(buffer8,width,height);
+    // getMaxRegion(buffer8,width,height);
+
+     //charPositions = getCharPosition(buffer8,width,height);
+     //qDebug() << "char size" << charPositions.size();
+     trans2RGB(buffer8,width,height,widthEff,image.bits());
+
+     //getRecognitions(buffer8,width);
+
+     SAFE_RELEASE(buffer8);
+
+
+     return sortCharPosition();
  }
 
  /**

@@ -34,6 +34,7 @@ public:
     void getMaxRegion(unsigned char *buffer8 , int width , int height );
     vector<REGION_ENTRY> getCharPosition(unsigned char *buffer8 , int width , int height );
     void noiseRemove(unsigned char *buffer8 , int width , int height );
+    void horizontalEdge(unsigned char *buffer8,int width , int height );
     void trans2RGB(unsigned char *buffer8 , int width , int height, int widthEff , unsigned char *buffer32 );
     void trans2Gray(unsigned char *buffer32 , int width , int height, int widthEff , unsigned char *buffer8 );
 

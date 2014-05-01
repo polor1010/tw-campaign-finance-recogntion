@@ -96,7 +96,10 @@ void ImageProcess::trans2Gray(unsigned char *buffer32 , int width , int height, 
     {
         for( x = 0 , k = 0 ; x < width ; x++ , k += 4)
         {
-           pBuffer8[x] = pBuffer32[k] ;//(pBuffer32[k] + pBuffer32[k+1] + pBuffer32[k+2]) / 3;
+            if( pBuffer32[k] > 128)
+                pBuffer8[x] = 255;//(pBuffer32[k] + pBuffer32[k+1] + pBuffer32[k+2]) / 3;
+            else
+                pBuffer8[x] = 0;
         }
     }
 
@@ -126,6 +129,11 @@ void ImageProcess::trans2RGB(unsigned char *buffer8 , int width , int height, in
            pBuffer32[k] = pBuffer32[k+1] = pBuffer32[k+2] = pBuffer8[x];
         }
     }
+
+}
+
+void ImageProcess::horizontalEdge(unsigned char *buffer8,int width , int height )
+{
 
 }
 
@@ -242,7 +250,7 @@ vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int
         bufferINT8[i] = 255 - buffer8[i];
     }
 
-    charPositions = connectedComponent(bufferINT8,width,height,height*height/110);//110為大約估算值,沒意義
+    charPositions = connectedComponent(bufferINT8,width,height,height*height/128);//128為大約估算值,沒意義
 
     for( i = 0 ; i < charPositions.size() ; i++ )
     {
