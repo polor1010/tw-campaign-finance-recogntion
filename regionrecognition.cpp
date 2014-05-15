@@ -9,11 +9,21 @@
 #include <QJsonObject>
 #include <QVariantMap>
 #include <QJsonArray>
+#include <math.h>
+
+bool regionCompareSize(const REGION_ENTRY &left, const REGION_ENTRY &right)
+{
+    return left.size > right.size;
+}
 
 
 RegionRecognition::RegionRecognition()
 {
-    isInverse = 0;
+    skew = 0.0;
+    isDeskew = true;
+    isMergeImage = false;
+    isDenoise = false;
+    isInverse = false;
     isLoadDataBase = loadPatterns();
 }
 /**
@@ -32,13 +42,23 @@ void RegionRecognition::writeJsonFile(QString outFilePath)
     QString content;
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)){
         //file.write("{\"recognitions\":[");
-        content = "{\"recognitions\":[";
 
-        for( i = 0 ; i < tableRegions.size(); i++ )//tableRegions.size()
+        content += "{\"theta\":"+QString::number(skew) +",";
+
+        if(isInverse)
+            content += "\"inverse\":1,";
+        else
+            content += "\"inverse\":0,";
+
+        content += "\"recognitions\":[";
+
+        for( i = 0 ; i < tableRegions.size(); i++ )
         {
             content += "{";
             content += "\"row\":" + QString::number(tableRegions.at(i).row) + ",";
             content += "\"column\":" + QString::number(tableRegions.at(i).column) + ",";
+            content += "\"left_top\":[" + QString::number(tableRegions.at(i).left) +","+ QString::number(tableRegions.at(i).top) + "],";
+            content += "\"right_down\":[" + QString::number(tableRegions.at(i).right) +","+ QString::number(tableRegions.at(i).bottom) + "],";
             content += "\"result\":\"" +tableRegions.at(i).result+"\"";
 
             if( i < tableRegions.size()-1 )//tableRegions.size() -1 )
@@ -53,7 +73,7 @@ void RegionRecognition::writeJsonFile(QString outFilePath)
         file.write(content.toUtf8());
     }
     file.close();
-
+    tableRegions.clear();
 }
 
 /**
@@ -127,6 +147,22 @@ bool RegionRecognition::readJsonFile(QString filePath)
     }
 }
 
+void RegionRecognition::calibrateDateResult(QString &date)
+{
+    int size = date.size();
+    if( date.at(size-3) != '/' )
+    {
+        date.insert(size-2,'/');
+    }
+
+    size = date.size();
+    if( date.at(size-6) != '/' )
+    {
+        date.insert(size-5,'/');
+    }
+
+}
+
 /**
      * 讀取 image file 並根據 tableRegions 記錄的位置做文字辨識 (目前只辨識 row 0:序號 1:日期 6:支出金額)
      *
@@ -137,6 +173,7 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
 {
     if( !isLoadDataBase )
     {
+        qDebug() << "database not load";
         return false;
     }
 
@@ -147,6 +184,19 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
         return false;
     }
 
+    if( skew != 0.0 )
+    {
+        QMatrix matrix;
+        matrix.rotate(-skew);
+        image = image.transformed(matrix);
+    }
+
+    if( isInverse )
+    {
+        QMatrix matrix;
+        matrix.rotate(180);
+        image = image.transformed(matrix);
+    }
 
     unsigned char *buffer24 = image.bits();
 
@@ -162,17 +212,11 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
         int posX = tableRegions.at(i).left;
         int posY = tableRegions.at(i).top;
 
-        if( isInverse )
-        {
-            tableRegions.at(i).column = 9 - tableRegions.at(i).column + 1;
-            tableRegions.at(i).row = 21 - tableRegions.at(i).row + 1;
-        }
-
         int column = tableRegions.at(i).column;
         int row = tableRegions.at(i).row;
 
         //只辨識 row 0:序號 1:日期 6:支出金額
-        if( row > 1  && (column == 1 || column == 2 || column == 7))
+        if( row > 1  && (column == 1 || column == 2|| column == 6 || column == 7))
         //if( row > 1  && (column == 4))
         {
             QImage regionImage = QImage(width,height,QImage::Format_ARGB32);
@@ -191,26 +235,24 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
                 }
             }
 
-            if( isInverse )
-            {
-                QMatrix matrix;
-                matrix.rotate(180);
-                regionImage = regionImage.transformed(matrix);
-            }
-
             if( patterns.size() > 0 )
+            {
                 tableRegions.at(i).result = processImage(regionImage);
+
+                if( column == 2 )//處理日期辨識結果 有時候 '/' 會沒有辨識到
+                    calibrateDateResult(tableRegions.at(i).result);
+            }
 
 #ifdef DEBUG_SAVE_IMAGE
             static int counter = 0;
-/**/
+
             drawInfo(regionImage);
             QPainter painter;
             painter.begin(&regionImage);
             painter.setPen(QPen(QColor(Qt::red)));
             painter.drawText(10,15,tableRegions.at(i).result);
             painter.end();
-
+/**/
             //QString::number(counter) +
             QString filePath = QDir::currentPath() + "/"+ QString::number(row)+"_"+QString::number(column)+".jpg";
             qDebug() << filePath;
@@ -219,8 +261,40 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
 #endif
         }
     }
+/*
+    image = image.convertToFormat(QImage::Format_ARGB32);
+    drawTableRegionInfo(image);
+    QString savePath = filePath.insert(filePath.size()-4,"_R");
+    image.save(savePath);
+    qDebug() << savePath;
+*/
 
     return true;
+}
+
+
+void RegionRecognition::drawTableRegionInfo(QImage &image)
+{
+    int i;
+
+    QPainter painter;
+    painter.begin(&image);
+    painter.setFont(QFont("Chicago", 18));
+    for( i = 0 ; i < tableRegions.size() ; i++ )
+    {
+        int left = tableRegions.at(i).left;
+        int top = tableRegions.at(i).top;
+        int right = tableRegions.at(i).right;
+        int bottom = tableRegions.at(i).bottom;
+        int column = tableRegions.at(i).column;
+        int row = tableRegions.at(i).row;
+        QString str = QString("(%1,%2) %3").arg(column).arg(row).arg(tableRegions.at(i).result);
+        painter.drawText( left , top - 16 , str );
+        painter.drawLine( left , top , right , bottom );
+
+    }
+    painter.end();
+
 }
 
 /**
@@ -254,6 +328,8 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
 
     counter++;
 }
+
+
 
 /**
      * 根據 charPositions 得知影像中文字位置, 並作辨識
@@ -328,8 +404,10 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
              }
 
              //qDebug() << "result " << charPositions.at(i).result << "ratio " << (float)subWidth/subHeight;
-             trans2Image(patternBuffer,PATTERN_WIDTH,PATTERN_HEIGHT);
 
+#ifdef DEBUG_SAVE_IMAGE
+             trans2Image(patternBuffer,PATTERN_WIDTH,PATTERN_HEIGHT);
+#endif
              SAFE_RELEASE(charBuffer);
              SAFE_RELEASE(patternBuffer);
 
@@ -350,19 +428,22 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
      charPositions.clear();
      //isSpace = false;
 
-
      int height = image.height();
      int width = image.width();
      int widthEff = image.bytesPerLine();
- qDebug() << widthEff << width;
+     //qDebug() << widthEff << width;
      unsigned char *pBuffer = image.bits();
 
      unsigned char *buffer8 = new uchar[width*height];
      memset(buffer8,0,sizeof(uchar)*width*height);
 
      trans2Gray(pBuffer,width,height,widthEff,buffer8);
-     noiseRemove(buffer8,width,height);
-     noiseRemove(buffer8,width,height);
+
+     if(isDenoise)
+     {
+         noiseRemove(buffer8,width,height);
+         noiseRemove(buffer8,width,height);
+     }
     // getMaxRegion(buffer8,width,height);
 
      //charPositions = getCharPosition(buffer8,width,height);
@@ -373,7 +454,6 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
 
      SAFE_RELEASE(buffer8);
 
-
      return sortCharPosition();
  }
 
@@ -383,7 +463,7 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
       * @param QImage image
       * @return QString 辨識結果
       */
- QString RegionRecognition::processImage(QImage image)
+ QString RegionRecognition::processImage(QImage &image)
  {
      charPositions.clear();
      //isSpace = false;
@@ -398,14 +478,36 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
      memset(buffer8,0,sizeof(uchar)*width*height);
 
      trans2Gray(pBuffer,width,height,widthEff,buffer8);
-     noiseRemove(buffer8,width,height);
-     noiseRemove(buffer8,width,height);
+     //noiseRemove(buffer8,width,height);
+     //noiseRemove(buffer8,width,height);
      getMaxRegion(buffer8,width,height);
 
-     charPositions = getCharPosition(buffer8,width,height);
+     int *horizontal = new int[width];
+     //memset(horizontal,0,sizeof(int)*width);
+
+     int top,bottom;
+     charPositions = getCharPosition(buffer8,width,height,horizontal,top,bottom);
      //qDebug() << "char size" << charPositions.size();
      trans2RGB(buffer8,width,height,widthEff,image.bits());
+/*
+     int x,y,k;
+     for( y = 0 ; y < height ; y++ , pBuffer += widthEff )
+     {
+         for( x = 0 , k = 0 ; x < width ; x++ , k += 4 )
+         {
+             if( horizontal[x] == 0 || y == top || y == bottom)//
+             //if(  y == top || y == bottom)//horizontal[x] == 0 ||
 
+             {
+                 pBuffer[k] = 0;
+                 pBuffer[k+1] = 0;
+                 pBuffer[k+2] = 255;
+
+             }
+
+         }
+     }
+*/
      getRecognitions(buffer8,width);
 
      SAFE_RELEASE(buffer8);
@@ -413,6 +515,386 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
 
      return sortCharPosition();
  }
+
+ /**
+      * 計算影像的歪斜角度,並校正
+      *
+      * @param QImage image
+      * @return void
+      */
+ void RegionRecognition::skewCalibration(QImage &image)
+ {
+     int height = image.height();
+     int width = image.width();
+     int widthEff = image.bytesPerLine();
+
+     unsigned char *pBuffer = image.bits();
+
+     unsigned char *buffer8 = new unsigned char[width*height];
+     memset(buffer8,0,sizeof(unsigned char)*width*height);
+
+     trans2Gray(pBuffer,width,height,widthEff,buffer8);
+
+     unsigned char *bufferHorizontal8 = new unsigned char[width*height];
+     memcpy(bufferHorizontal8,buffer8,sizeof(unsigned char)*width*height);
+
+     vector<TABLE_LINE> horizontalLines;
+     skew = horizontalLineFilter(bufferHorizontal8,width,height,horizontalLines);
+
+     qDebug() << "width/height: " << image.width() << image.height() << "skew "<< skew;
+
+     QMatrix matrix;
+     matrix.rotate(-skew);
+     image = image.transformed(matrix);
+#ifdef DEBUG_SAVE_IMAGE
+     image.save("skewCalibration.jpg");
+#endif
+     //trans2RGB(bufferHorizontal8,width,height,widthEff,image.bits());
+
+     SAFE_RELEASE(bufferHorizontal8);
+     SAFE_RELEASE(buffer8);
+ }
+
+
+/**
+     * 擷取 table 中的每個欄位位置
+     *
+     * @param QImage image
+     * @return void
+     */
+bool RegionRecognition::getRegionPosition(QImage &image)
+{
+    int i;
+    int height = image.height();
+    int width = image.width();
+    int widthEff = image.bytesPerLine();
+
+    unsigned char *pBuffer = image.bits();
+
+    unsigned char *buffer8 = new unsigned char[width*height];
+    memset(buffer8,255,sizeof(unsigned char)*width*height);
+
+    trans2Gray(pBuffer,width,height,widthEff,buffer8);
+
+    int *bufferINT = new int[width*height];
+    memset(bufferINT,0,sizeof(int)*width*height);
+
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        bufferINT[i] = buffer8[i];
+    }
+
+    vector<REGION_ENTRY> regions = connectedComponent(bufferINT,width,height,50);
+    std::sort(regions.begin(), regions.end(),regionCompareSize);
+
+    if( regions.size() > 1 )
+    {
+        vector<Point> LeftTopPoints;
+        getCornerPoints( regions , LeftTopPoints , LEFT_TOP );
+        sortCorner(LeftTopPoints);
+
+        vector<Point> RightBottomPoints;
+        getCornerPoints( regions , RightBottomPoints , RIGHT_BOTTOM );
+        sortCorner(RightBottomPoints);
+
+        int rbSize = RightBottomPoints.size();
+        int ltSize = LeftTopPoints.size();
+        isInverse = false;
+        if( (rbSize == ltSize)  && (ltSize > 0) )
+        {
+            int top = LeftTopPoints.at(0).y;
+            int bottom = RightBottomPoints.at(RightBottomPoints.size()-1).y;
+            if( rbSize < 189 )
+            {
+                 if( top > (height - bottom) )
+                 {
+                     top = (height - bottom) ;
+                 }
+                 else
+                 {
+                     bottom = height - top;
+                 }
+            }
+
+            isInverse = isReverse( buffer8,width,height,top,bottom);
+
+            qDebug() << "isInverse:" << isInverse;// << top << bottom << top << height-bottom;
+
+            if( isInverse )
+            {
+                QMatrix matrix;
+                matrix.rotate(180);
+                image = image.transformed(matrix);
+                reverseCornerPoints(LeftTopPoints,RightBottomPoints,width,height);
+            }
+
+            for( i = 0 ; i < rbSize ; i++ )
+            {
+                TABLE_REGION region;
+                region.left = LeftTopPoints.at(i).x;
+                region.top = LeftTopPoints.at(i).y;
+                region.right = RightBottomPoints.at(i).x;
+                region.bottom = RightBottomPoints.at(i).y;
+                region.column = (i) % TABLE_COLUMN + 1;
+                region.row = (i) / TABLE_COLUMN + 1;
+                tableRegions.push_back(region);
+            }
+/*
+            for( i = 0 ; i < width * height ; i++ )
+            {
+                buffer8[i] = bufferINT[i] ;
+            }
+            trans2RGB(buffer8,width,height,widthEff,image.bits());
+            image.save("result.jpg");
+*/
+        }
+        else
+        {
+            qDebug() << "get corner point fail.." << "getLeftTopPoints: "<<ltSize<<"getRightBottomPoints: "<<rbSize;
+        }
+    }
+    else
+    {
+        qDebug() << "get region error, region size = " << regions.size();
+    }
+    //qDebug() << "finish getRegions";
+
+    SAFE_RELEASE(bufferINT);
+    SAFE_RELEASE(buffer8);
+
+    return true;
+}
+
+
+
+
+/**
+     * 移除 table 中的文字
+     *
+     * @param QImage image
+     * @return void
+     */
+void RegionRecognition::removeRegionChar(QImage &image)
+{
+      int x,y,i;
+      int height = image.height();
+      int width = image.width();
+      int widthEff = image.bytesPerLine();
+
+      unsigned char *pBuffer = image.bits();
+
+      unsigned char *buffer8 = new unsigned char[width*height];
+      memset(buffer8,255,sizeof(unsigned char)*width*height);
+
+      trans2Gray(pBuffer,width,height,widthEff,buffer8);
+
+      int *bufferINT = new int[width*height];
+      memset(bufferINT,0,sizeof(int)*width*height);
+
+      for( i = 0 ; i < width * height ; i++ )
+      {
+          bufferINT[i] = buffer8[i];
+      }
+
+      vector<REGION_ENTRY> regions = connectedComponent(bufferINT,width,height,50);
+
+      for( i = 0 ; i < regions.size() ; i++ )
+      {
+          int startX = regions.at(i).left;
+          int startY = regions.at(i).top;
+          int subWidth = abs(regions.at(i).left-regions.at(i).right)+1;
+          int subHeight = abs(regions.at(i).top-regions.at(i).bottom)+1;
+
+          if( subWidth < width / 2 )
+          {
+              unsigned char *pBuffer8 = buffer8 + ( startY + subHeight / 5)* width + startX;
+
+              for( y =  subHeight / 6 ; y < subHeight -  subHeight / 6 ; y++ , pBuffer8 += width )
+              {
+                  for( x = 0 ; x < subWidth ; x++ )
+                  {
+                      pBuffer8[x] = 255;
+                  }
+              }
+          }
+      }
+
+      SAFE_RELEASE(bufferINT);
+      SAFE_RELEASE(buffer8);
+}
+
+/**
+     * 將 table 的左上右下的點座標, 做 inverse
+     *
+     * @param vector<Point> &ltPoints
+     * @param vector<Point> &rbPoints
+     * @param int width
+     * @param int height
+     * @return QString 辨識結果
+     */
+void RegionRecognition::reverseCornerPoints(vector<Point> &ltPoints, vector<Point> &rbPoints, int width, int height)
+{
+    int i;
+
+    vector<Point> ltPointsTemp;
+    vector<Point> rbPointsTemp;
+
+    for( i = 0 ; i < ltPoints.size() ; i++ )
+    {
+        ltPointsTemp.push_back( ltPoints.at(ltPoints.size()-i-1) );
+        rbPointsTemp.push_back( rbPoints.at(rbPoints.size()-i-1) );
+    }
+
+    for( i = 0 ; i < ltPoints.size() ; i++ )
+    {
+        rbPoints.at(i).x = width - ltPointsTemp.at(i).x;
+        rbPoints.at(i).y = height - ltPointsTemp.at(i).y;
+
+        ltPoints.at(i).x = width - rbPointsTemp.at(i).x;
+        ltPoints.at(i).y = height - rbPointsTemp.at(i).y;
+    }
+
+}
+
+/**
+     * 畫偵測到的欄位位置,(左上點畫到右下,有些圖bbp只有1所以沒有設定顏色)
+     *
+     * @param QImage &image
+     * @param vector<Point> &ltPoints
+     * @param vector<Point> &rbPoints
+     * @return void
+     */
+void RegionRecognition::drawRegionInfo(QImage &image , vector<Point> &ltPoints, vector<Point> &rbPoints)
+{
+    int i;
+
+    QPainter painter;
+    painter.begin(&image);
+    //painter.setPen(QPen(QBrush(),5));
+
+    if( ltPoints.size() == rbPoints.size() )
+    {
+        for( i = 0 ; i <  ltPoints.size() ; i++ )
+        {
+            int column = (i) % TABLE_COLUMN + 1;
+            int row = (i) / TABLE_COLUMN + 1;
+            QString str = QString("(%1,%2)").arg(column).arg(row);
+            painter.drawText( ltPoints.at(i).x ,ltPoints.at(i).y ,str );
+            painter.drawLine( ltPoints.at(i).x ,ltPoints.at(i).y , rbPoints.at(i).x , rbPoints.at(i).y );
+        }
+    }
+    painter.end();
+
+}
+
+/**
+     * 先做 line detection(垂直水平分開做) 再計算 cross points
+     *
+     * @param QImage &image
+     * @return void
+     */
+void RegionRecognition::getLineCrossPoints(QImage &image)
+{
+    int i,j;
+    int height = image.height();
+    int width = image.width();
+    int widthEff = image.bytesPerLine();
+
+    unsigned char *pBuffer = image.bits();
+
+    unsigned char *buffer8 = new unsigned char[width*height];
+    memset(buffer8,255,sizeof(unsigned char)*width*height);
+
+    trans2Gray(pBuffer,width,height,widthEff,buffer8);
+
+    unsigned char *bufferVertical8 = new unsigned char[width*height];
+    memcpy(bufferVertical8,buffer8,sizeof(unsigned char)*width*height);
+
+    unsigned char *bufferHorizontal8 = new unsigned char[width*height];
+    memcpy(bufferHorizontal8,buffer8,sizeof(unsigned char)*width*height);
+
+    vector<TABLE_LINE> verticalLines;
+    vector<TABLE_LINE> horizontalLines;
+
+    vertivalLineFilter(bufferVertical8,width,height,verticalLines);
+    //horizontalLineFilter(bufferHorizontal8,width,height,horizontalLines);
+
+    qDebug() << "filter finish..";
+
+
+    vector<Point> crossPoints;
+    for( i = 0 ; i < verticalLines.size() ; i++ )
+    {
+        for( j = 0 ; j < horizontalLines.size() ; j++ )
+        {
+            if( fabs(verticalLines.at(i).a) < 0.2 && fabs(horizontalLines.at(j).a) < 0.2 )
+            {
+                Point point;
+                point.x = verticalLines.at(i).b;
+                point.y = horizontalLines.at(j).b;
+
+                if( point.x > 0 && point.x < width && point.y > 0 && point.y < height )
+                {
+                    crossPoints.push_back(point);
+                   // qDebug() << "CrossPoints : " << point.x << point.y << horizontalLines.at(j).a << horizontalLines.at(j).b;
+                    //qDebug() << verticalLines.at(i).a << verticalLines.at(i).b;
+                 }
+            }
+        }
+    }
+
+     memset(buffer8,0,sizeof(unsigned char)*width*height);
+
+     for( i = 0 ; i < crossPoints.size() ; i++ )
+     {
+         int x = crossPoints.at(i).x;
+         int y = crossPoints.at(i).y;
+
+         buffer8[y*width+x] = 255;
+     }
+
+
+     for( i  = 0 ; i < width * height ; i++ )
+     {
+         int diff = abs(bufferVertical8[i] - bufferHorizontal8[i]);
+         if( diff == 0 )
+         {
+             //bufferVertical8[i] = bufferHorizontal8[i] = 0;
+         }
+
+         buffer8[i] = (bufferVertical8[i]);// | bufferHorizontal8[i]) ;
+     }
+
+     trans2RGB(buffer8,width,height,widthEff,image.bits());
+
+     SAFE_RELEASE(bufferVertical8);
+     SAFE_RELEASE(bufferHorizontal8);
+     SAFE_RELEASE(buffer8);
+
+     image.save("test3.jpg");
+}
+
+/**
+     * 先做影像角度校正, 再找出欄位的左上和右下的座標點
+     *
+     * @param QImage &image
+     * @return void
+     */
+bool RegionRecognition::getRegions(QString filePath)
+{
+    QImage image;
+    if( !image.load(filePath) )
+    {
+        qDebug() << "image load error";
+        return false;
+    }
+
+    if( isDeskew )
+        skewCalibration(image);
+
+    return getRegionPosition(image);
+}
+
 
  /**
       * 將 charPositions 裡的文字從左到右排序, 並回傳結果

@@ -53,6 +53,19 @@
      <string>Image(json)</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="pushButton_Line">
+    <property name="geometry">
+     <rect>
+      <x>280</x>
+      <y>90</y>
+      <width>114</width>
+      <height>32</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Line</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
@@ -118,6 +131,22 @@
     <hint type="sourcelabel">
      <x>336</x>
      <y>110</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>199</x>
+     <y>165</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_Line</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>getLines()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>336</x>
+     <y>140</y>
     </hint>
     <hint type="destinationlabel">
      <x>199</x>

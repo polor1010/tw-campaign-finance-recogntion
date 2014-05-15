@@ -33,10 +33,15 @@ public:
     bool readJsonFile(QString filePath);
     void writeJsonFile(QString filePath);
     bool getRegionRecognitions(QString filePath);
+    bool getRegions(QString filePath);
 
     QString processImageChinese(QImage &image);
-    QString processImage(QImage image);
+    QString processImage(QImage &image);
     void drawInfo(QImage &image);
+
+    void setMergeImage(bool set){isMergeImage=set;};
+    void setDenoise(bool set){isDenoise=set;};
+    void setDeskew(bool set){isDeskew=set;};
 
 private:
     QString sortCharPosition();
@@ -47,13 +52,28 @@ private:
     void saveWord();
     void trans2Image(unsigned char *buffer8,int width,int height);
 
+    void skewCalibration(QImage &image);
+    void removeRegionChar(QImage &image);
+    bool getRegionPosition(QImage &image);
+
+    void getLineCrossPoints(QImage &image);
+
+    void drawTableRegionInfo(QImage &image);
+    void drawRegionInfo(QImage &image , vector<Point> &ltPoints, vector<Point> &rbPoints);
+    void reverseCornerPoints(vector<Point> &ltPoints, vector<Point> &rbPoints, int width , int height );
+    void calibrateDateResult(QString &date);
+
 private:
     vector<OCR_PATTERN> patterns;
     vector<REGION_ENTRY> charPositions;
     vector<TABLE_REGION> tableRegions;
     QImage image;
+    float skew;
     bool isLoadDataBase;
     bool isInverse;
+    bool isMergeImage;
+    bool isDenoise;
+    bool isDeskew;
 
 };
 

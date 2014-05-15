@@ -32,6 +32,25 @@ void MainWindow::paintEvent(QPaintEvent *)
     }
 }
 
+void MainWindow::getLines()
+{
+
+    filePath = QFileDialog::getOpenFileName(this, tr("Open File"),
+                                                     "",
+                                                     tr("Files (*.*)"));
+
+    regionRecognition.setDeskew(true);
+    regionRecognition.getRegions(filePath);
+    regionRecognition.getRegionRecognitions(filePath);
+
+    int fileNameLength = filePath.length();
+    QString savePath = filePath.replace(fileNameLength-4,4,".json");
+    qDebug() << savePath;
+    regionRecognition.writeJsonFile(savePath);
+
+    update();
+}
+
 
 
 void MainWindow::processImage()
@@ -45,6 +64,7 @@ void MainWindow::processImage()
                                                      "",
                                                      tr("Files (*.*)"));
 
+
     regionRecognition.readJsonFile(jSonFilePath);
     regionRecognition.getRegionRecognitions(filePath);
     regionRecognition.writeJsonFile("result.json");
@@ -52,6 +72,7 @@ void MainWindow::processImage()
     image.load(filePath);
 
     qDebug() << filePath << jSonFilePath;
+
 
 }
 
@@ -72,7 +93,7 @@ void MainWindow::processRegionImage()
     qDebug() << image.bytesPerLine();
     qDebug() << image.bitPlaneCount();
 
-    regionRecognition.processImageChinese(image);
+    regionRecognition.processImage(image);
 
     regionRecognition.drawInfo(image);
     //int fileNameLength = filePath.length();
@@ -99,17 +120,20 @@ void MainWindow::getFolderFiles()
     QFileInfoList list = dir.entryInfoList(nameFilter, QDir::Files);
     //qDebug()<<"Bytes Filename";
 
+    regionRecognition.setDeskew(true);
+
     for (int i = 0; i < list.size(); ++i)  {
         QFileInfo fileInfo = list.at(i);
         filePath = fileInfo.filePath();
-        image.load(filePath);
+        //image.load(filePath);
 
-        regionRecognition.processImage(image);
-        regionRecognition.drawInfo(image);
+        regionRecognition.getRegions(filePath);
+        regionRecognition.getRegionRecognitions(filePath);
 
-        //int fileNameLength = filePath.length();
-        //qDebug()<<filePath.insert(fileNameLength-4,"_R");
-        image.save(filePath);
+        int fileNameLength = filePath.length();
+        QString savePath = filePath.replace(fileNameLength-4,4,".json");
+        qDebug() << savePath;
+        regionRecognition.writeJsonFile(savePath);
     }
 
 }

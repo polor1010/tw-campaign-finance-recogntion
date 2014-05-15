@@ -30,6 +30,7 @@ public slots:
     void processImage();
     void processRegionImage();
     void getFolderFiles();
+    void getLines();
 
 };
 

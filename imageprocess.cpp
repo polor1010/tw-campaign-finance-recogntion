@@ -1,6 +1,24 @@
 #include "imageprocess.h"
+#include <math.h>
 #include <QDebug>
 
+#define LINE_WIDTH 10
+
+
+bool tableLineCompareFitCounter(const TABLE_LINE &left, const TABLE_LINE &right)
+{
+    return left.fitCounter > right.fitCounter;
+}
+
+bool compareY(const Point &left, const Point &right)
+{
+    return left.y < right.y;
+}
+
+bool compareX(const Point &left, const Point &right)
+{
+    return left.x < right.x;
+}
 
 
 /**
@@ -74,6 +92,621 @@ void ImageProcess::chamferDistance(unsigned char *buffer8, int width, int height
 
 }
 
+/**
+     * 將 buffer 中座標 (x,y) ~ (x-length,y) 的值設為 0
+     *
+     * @param unsigned char *buffer8
+     * @param int   width
+     * @param int x
+     * @param int y
+     * @param int length
+     * @return void
+     */
+void ImageProcess::horizontalClear(unsigned char *buffer8 , int width ,int x, int y , int length )
+{
+    int i;
+
+    unsigned char *pBuffer8 = buffer8 + y * width + x;
+
+    for( i = 0 ; i <= length ; i++ )
+        pBuffer8[i*width] = 0;
+
+}
+
+/**
+     * 將 buffer 中座標 (x,y) ~ (x,y-length) 的值設為 0
+     *
+     * @param unsigned char *buffer8
+     * @param int   width
+     * @param int x
+     * @param int y
+     * @param int length
+     * @return void
+     */
+void ImageProcess::verticalClear(unsigned char *buffer8 , int width ,int x, int y , int length )
+{
+    int i;
+
+    //qDebug() << x << y;
+    unsigned char *pBuffer8 = buffer8 + y * width + x;
+
+    for( i = 0 ; i < length ; i++ )
+        pBuffer8[i] = 0;
+}
+
+/**
+     * 將偵測垂直線並回傳其傾斜角度
+     *
+     * @param unsigned char *edgeMap
+     * @param unsigned char *centerMap
+     * @param int   width
+     * @param int   height
+     * @param REGION_DIRECTION direction
+     * @param vector<TABLE_LINE> &lines
+     * @return float 影像傾斜(direction)角度
+     */
+float ImageProcess::getRegionLineFit( unsigned char *edgeMap,unsigned char *centerMap , int width , int height , REGION_DIRECTION direction , vector<TABLE_LINE> &lines)
+{
+    int x,y,i;
+
+    int *bufferINT = new int[width*height];
+    memset(bufferINT,0,sizeof(int)*width*height);
+
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        bufferINT[i] = edgeMap[i];
+    }
+
+    vector<REGION_ENTRY> regions = connectedComponent(bufferINT,width,height,20);
+    //vector<TABLE_LINE> lines;
+
+    for( i = 0 ; i < regions.size() ; i++ )
+    {
+        if( regions.at(i).IsRegion )
+        {
+            TABLE_LINE line;
+            line.label = regions.at(i).label;
+            line.fitCounter = 0;
+            lines.push_back(line);
+            //qDebug() << "region: " << i << regions.at(i).label;
+        }
+    }
+
+    unsigned char *pCenterMap = centerMap + width + 1;
+    int *pBufferINT = bufferINT + width + 1;
+
+    for( y = 1 ; y < height - 1; y++ , pBufferINT += width , pCenterMap += width )
+    {
+        for( x = 1 ; x < width - 1 ; x++ )
+        {
+            if( pBufferINT[x] > 0 && pCenterMap[x] == 255 )
+            {
+                Point point;
+                point.x = x;
+                point.y = y;
+                int label = pBufferINT[x];
+                lines.at(label-1).centerPoints.push_back(point);
+            }
+        }
+    }
+
+
+    for( i = 0 ; i < lines.size() ; i++ )
+    {
+        lineFit( lines.at(i).centerPoints , lines.at(i).a , lines.at(i).b , direction );
+       // if( lines.at(i).a == 0.0 )
+        // qDebug() << "line " << i << lines.at(i).label << lines.at(i).centerPoints.size() << lines.at(i).a << lines.at(i).b  << lines.at(i).centerPoints.size();
+    }
+
+    int j,k;
+    for( i = 0 ; i < lines.size() ; i++ )
+    {
+        vector<Point> fitPoints;
+        for( j = i ; j < lines.size() ; j++)
+        {
+            if( (i != j) && (lines.at(i).centerPoints.size() > 10) )
+            {
+                float a = lines.at(i).a;
+                float b = lines.at(i).b;
+
+                for( k = 0 ; k < lines.at(j).centerPoints.size() ; k++ )
+                {
+                    int x = lines.at(j).centerPoints.at(k).x;
+                    int y = lines.at(j).centerPoints.at(k).y;
+
+                    if( a != 0.0 )
+                    {
+                        if( fabs(a * x + b - y) < 5.0 )
+                        {
+                            Point point;
+                            point.x = x;
+                            point.y = y;
+                            lines.at(i).fitCounter++;
+                           // fitPoints.push_back(point);
+                            //lines.at(j).fitCounter--;
+                        }
+                    }
+                    else
+                    {
+                        if( direction == V_DIR )
+                        {
+                            if( fabs(b-x) < 5.0 )
+                            {
+                                lines.at(i).fitCounter++;
+                                //lines.at(j).fitCounter--;
+                            }
+                        }
+                        else
+                        {
+                            if( fabs(a * x + b - y) < 5.0 )
+                            {
+                                lines.at(i).fitCounter++;
+                                //lines.at(j).fitCounter--;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        //for( m = 0 ; m < fitPoints.size() ; m++ )
+         //   lines.at(i).centerPoints.push_back(fitPoints.at(m));
+
+        lines.at(i).fitCounter += lines.at(i).centerPoints.size();
+    }
+
+    std::sort(lines.begin(), lines.end(),tableLineCompareFitCounter);
+
+/*
+    for( i = 0 ; i < 10 ; i++ )
+    {
+        //lineFit( lines.at(i).centerPoints , lines.at(i).a , lines.at(i).b , direction );
+
+        qDebug() << "line " << i << lines.at(i).label << lines.at(i).centerPoints.size() << lines.at(i).a << lines.at(i).b << lines.at(i).fitCounter;
+    }
+
+    memset(edgeMap,0,sizeof(unsigned char)*width*height);
+
+    unsigned char *pEdgeMap = edgeMap + width + 1;
+
+    for( y = 1 ; y < height - 1; y++ , pEdgeMap += width )
+    {
+        for( x = 1 ; x < width - 1 ; x++ )
+        {
+            for( i = 0 ; i < lines.size() ; i++ )// lines.size()
+            {
+                if( fabs( lines.at(i).a ) < 0.2 )//&& lines.at(i).fitCounter > 50  ) //&& lines.at(i).a < -10.0 )
+                {
+                    float a = lines.at(i).a;
+                    float b = lines.at(i).b;
+
+                    if( a != 0.0 )
+                    {
+                        if( fabs(a * x + b - y) < 5.0 )
+                        {
+                            pEdgeMap[x] = 255;
+                        }
+                    }
+                    else
+                    {
+                        if( direction == V_DIR )
+                        {
+                            if( fabs(b-x) < 5.0 )
+                            {
+                                pEdgeMap[x] = 255;
+                            }
+                        }
+                        else
+                        {
+                            if( fabs(a * x + b - y) < 5.0 )
+                            {
+                                pEdgeMap[x] = 255;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        edgeMap[i] = bufferINT[i] ;
+    }
+
+    for( i = 0 ;  i < 5 ; i++ )
+    {
+        qDebug() << i << lines.at(i).a << lines.at(i).b << lines.at(i).centerPoints.size();
+        for( k = 0 ; k < lines.at(i).centerPoints.size() ; k++ )
+        {
+            int x = lines.at(i).centerPoints.at(k).x;
+            int y = lines.at(i).centerPoints.at(k).y;
+
+             edgeMap[y*width+x]= 255;
+        }
+    }
+*/
+    SAFE_RELEASE(bufferINT);
+
+    if( lines.size() > 0 )
+        return atan(lines.at(0).a) * 180 / 3.1415;
+    else
+        return 0.0;
+}
+
+/**
+     * 將偵測垂直線並回傳其傾斜角度
+     *
+     * @param unsigned char *buffer8
+     * @param int   width
+     * @param int   height
+     * @param int   widthEff
+     * @param vector<TABLE_LINE> &lines
+     * @return float 影像垂直傾斜角度
+     */
+float ImageProcess::vertivalLineFilter(unsigned char *buffer8 , int width , int height , vector<TABLE_LINE> &lines)
+{
+    int x,y,i;
+
+    unsigned char *edgeMap = new unsigned char[width*height];
+    memset(edgeMap,0,sizeof(unsigned char)*width*height);
+
+    unsigned char *centerMap = new unsigned char[width*height];
+    memset(centerMap,0,sizeof(unsigned char)*width*height);
+
+    unsigned char *pCenterMap = centerMap + width + 1;
+    unsigned char *pBuffer8 = buffer8 + width + 1;
+    unsigned char *pEdgeMap = edgeMap + width + 1;
+
+    for( y = 1 ; y < height - 1 ; y++ , pBuffer8 += width , pEdgeMap += width , pCenterMap += width )
+    {
+        for( x = 1 ; x < width - LINE_WIDTH ; x++ )
+        {
+            if( pBuffer8[x] < pBuffer8[x-1] )//possitive edge
+            {
+                pEdgeMap[x] = 255;
+                bool isEnd = false;
+                int length = 1;
+
+                for( i = 1 ; i <= LINE_WIDTH ; i++ )
+                {
+                    length++;
+                    unsigned char *pSubBuffer8 = pBuffer8 + x + i;
+                    unsigned char *pSubEdgeMap = pEdgeMap + x + i;
+
+                    if( pSubBuffer8[0] == 0 )
+                        pSubEdgeMap[0] = 255;
+
+                    if( pSubBuffer8[0] < pSubBuffer8[1] )//negative edge
+                    {
+                        isEnd = true;
+                        break;
+                    }
+                }
+
+                if( !isEnd )
+                    verticalClear(edgeMap ,  width , x,  y , LINE_WIDTH );
+
+                pCenterMap[x+length/2] = 255;
+            }
+        }
+    }
+
+    float skew =  getRegionLineFit(edgeMap,centerMap,width,height,V_DIR,lines);
+
+    qDebug() << "vertivalLineFilter";
+
+
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        buffer8[i] = edgeMap[i];
+    }
+
+    SAFE_RELEASE(centerMap);
+    SAFE_RELEASE(edgeMap);
+
+    return skew;
+}
+
+
+/**
+     * 利用一堆點去 fit 出線方程式
+     *
+     * @param vector<Point> pints
+     * @param float &a
+     * @param float &b
+     * @param REGION_DIRECTION direction
+     * @return void
+     */
+void ImageProcess::lineFit(vector<Point> pints , float &a,float &b , REGION_DIRECTION direction )
+{
+    int i;
+    double t , sx = 0.0 , sy = 0.0 , st2 = 0.0 , sxoss = 0.0;
+    a=0.0;
+
+    int dataSize = pints.size();
+
+    for ( i = 0 ; i < dataSize; i++ )
+    {
+        sx += pints.at(i).x;//Point[i].x;
+        sy += pints.at(i).y;//Point[i].y;
+    }
+
+    sxoss = sx / dataSize;
+
+
+    for( i = 0 ; i < dataSize ; i++ )
+    {
+        t = pints.at(i).x - sxoss;
+        st2 += t * t;
+        a+= t * pints.at(i).y;
+    }
+
+    if( st2 == 0 )//處理無限大問題, m = 0 標示為無限大狀況, 並不是實際上的斜率
+    {
+        a = 0;
+    }
+    else
+    {
+        a /= st2;
+    }
+    b = ( sy - sx * (a) ) / dataSize;
+    //qDebug() << "fit " << a << b << dataSize;
+
+    if( direction == V_DIR )//處理垂直斜率無限大問題
+    {
+        // add 2010.7.2
+        if( fabs(a) < 0.2 )//|| fabs(a) > 50 )
+        {
+            a = 0.0;
+            b = sxoss;
+        }
+    }
+
+}
+
+/**
+     * 將偵測水平線並回傳其傾斜角度
+     *
+     * @param unsigned char *buffer8
+     * @param int   width
+     * @param int   height
+     * @param int   widthEff
+     * @param vector<TABLE_LINE> &lines
+     * @return float 影像水平傾斜角度
+     */
+float ImageProcess::horizontalLineFilter(unsigned char *buffer8 , int width , int height, vector<TABLE_LINE> &lines)
+{
+    int x,y,i;
+
+    unsigned char *edgeMap = new unsigned char[width*height];
+    memset(edgeMap,0,sizeof(unsigned char)*width*height);
+
+    unsigned char *centerMap = new unsigned char[width*height];
+    memset(centerMap,0,sizeof(unsigned char)*width*height);
+
+    unsigned char *pCenterMap = centerMap + width + 1;
+    unsigned char *pBuffer8 = buffer8 + width + 1;
+    unsigned char *pEdgeMap = edgeMap + width + 1;
+
+    for( y = 1 ; y < height - 8 ; y++ , pBuffer8 += width , pEdgeMap += width , pCenterMap += width )
+    {
+        for( x = 1 ; x < width - 1 ; x++ )
+        {
+            if( pBuffer8[x] < pBuffer8[x-width] )//possitive edge
+            {
+                pEdgeMap[x] = 255;
+                bool isEnd = false;
+
+                int length = 1;
+                for( i = 1 ; i <= LINE_WIDTH ; i++ )
+                {
+                    length++;
+                    unsigned char *pSubBuffer8 = pBuffer8 + x + width * i;
+                    unsigned char *pSubEdgeMap = pEdgeMap + x + width * i;
+
+                    if( pSubBuffer8[0] == 0 )
+                        pSubEdgeMap[0] = 255;
+
+                    if( pSubBuffer8[0] < pSubBuffer8[width] )//negative edge
+                    {
+                        isEnd = true;
+                        break;
+                    }
+                }
+
+                if( !isEnd )
+                    horizontalClear(edgeMap ,  width , x,  y ,  LINE_WIDTH );
+
+                pCenterMap[x+length/2*width] = 255;
+            }
+        }
+    }
+
+    float skew = getRegionLineFit(edgeMap,centerMap,width,height,H_DIR,lines);
+
+    //qDebug() << "horizontalLineFilter";
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        buffer8[i] = edgeMap[i];
+    }
+
+    //SAFE_RELEASE(bufferINT);
+    SAFE_RELEASE(centerMap);
+    SAFE_RELEASE(edgeMap);
+
+    return skew;
+}
+
+/**
+     * 利用 edge 數量辨識影像是否上下顛倒
+     *
+     * @param unsigned char *buffer8
+     * @param int   width
+     * @param int   height
+     * @param int   top
+     * @param int   bottom
+     * @return bool 影像是否顛倒
+     */
+bool ImageProcess::isReverse(unsigned char *buffer8 , int width , int height , int top, int bottom)
+{
+    int x,y;
+
+    //qDebug() << "top bottom "<< top << bottom;
+    unsigned char *pBuffer8 = buffer8 + 1;
+
+    int topEdgeSum = 0;
+    int bottomEdgeSum = 0;
+
+    for( y = 0 ; y < height ; y++ , pBuffer8 += width )
+    {
+        for( x = 1 ; x < width - 1 ; x++ )
+        {
+            int value = abs( pBuffer8[x-1] - pBuffer8[x+1] );
+            if( y < top )
+            {
+                topEdgeSum += value;
+            }
+
+            if( y > bottom )
+            {
+                bottomEdgeSum += value;
+            }
+        }
+    }
+
+    //qDebug() << "bottomEdgeSum " << bottomEdgeSum;
+    //qDebug() << "topEdgeSum " << topEdgeSum;
+
+    return bottomEdgeSum > topEdgeSum;
+
+}
+
+/**
+     * 將 points 先做y方向排序再做x方向排序
+     *
+     * @param vector<Point> &cornerPoints
+     * @return void
+     */
+ void ImageProcess::sortCorner(vector<Point> &cornerPoints)
+ {
+     std::sort(cornerPoints.begin(), cornerPoints.end(),compareY);
+
+     int i,j;
+     int index = 0;
+     vector<Point> points[TABLE_ROW];
+     for( i = 0 ; i < cornerPoints.size() ; i++ )
+     {
+         points[index].push_back(cornerPoints.at(i));
+         if( ((i + 1) % TABLE_COLUMN ) == 0)
+         {
+             //qDebug() << "compare" << index << i << rbPoints[index].size();
+             std::sort(points[index].begin(), points[index].end(),compareX);
+             index++;
+         }
+     }
+     cornerPoints.clear();
+     for( i = 0 ; i < index ; i++ )
+     {
+         for( j = 0 ; j < points[i].size() ; j++ )
+         {
+             cornerPoints.push_back(points[i].at(j));
+         }
+     }
+ }
+
+ /**
+      * 將 points 做 merge, 距離在 25 pixel 內視為同一個 group
+      * @param vector<REGION_ENTRY> &regions
+      * @param vector<Point> &points
+      * @param CORNER_TYPE type
+      * @return void
+      */
+ void ImageProcess::getCornerPoints(vector<REGION_ENTRY> &regions, vector<Point> &points, CORNER_TYPE type)
+ {
+     int i,j;
+     int end;
+     float ratio = 0.0;
+     for( i = 1 ; i < regions.size() - 1 ; i++ )
+     {
+         float ratinTemp = regions.at(i).size / regions.at(i+1).size;
+         if(  ratinTemp > ratio )
+         {
+             ratio = ratinTemp;
+             end = i;
+         }
+         //qDebug() << i << regions.at(i).left << regions.at(i).top << regions.at(i).size << end;
+     }
+     //qDebug() << "end: " << end;
+
+     vector<Point> crossPoints;
+     for( i = 1 ; i <= end ; i++ )
+     {
+         for( j = 1 ; j <= end ; j++ )
+         {
+             if( i != j )
+             {
+                 Point point;
+                 if( type == LEFT_TOP )
+                 {
+                     point.x = regions.at(i).left;
+                     point.y = regions.at(j).top;
+                 }
+                 else
+                 {
+                     point.x = regions.at(i).right;
+                     point.y = regions.at(j).bottom;
+                 }
+                 crossPoints.push_back(point);
+             }
+         }
+     }
+
+     for( i = 0 ; i < crossPoints.size() ; i++ )
+     {
+         int count = 1;
+
+         int x1 = crossPoints.at(i).x;
+         int y1 = crossPoints.at(i).y;
+         int sumX = x1;
+         int sumY = y1;
+
+         for( j = i + 1; j < crossPoints.size() ; j++ )
+         {
+             int x2 = crossPoints.at(j).x;
+             int y2 = crossPoints.at(j).y;
+
+             if( y2 > 0 && x2 > 0 )
+             {
+                 int distance = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2);
+
+                 if( distance < 625 )
+                 {
+                     count++;
+                     //if( x2 > x1 )
+                        sumX += x2;
+                     //if( y2 > y1 )
+                        sumY += y2;
+                     crossPoints.at(j).x = crossPoints.at(j).y =-9999;
+                 }
+             }
+         }
+         if( count > 1 )
+         {
+             Point point;
+             point.x = sumX / count;
+             point.y = sumY / count;
+             points.push_back(point);
+         }
+     }
+
+     if( type == LEFT_TOP )
+        qDebug() << "getLeftTopPoints :"<< points.size();
+     else
+        qDebug() << "getRightBottomPoints :"<< points.size();
+
+     sortCorner(points);
+ }
+
 
 /**
      * 將 32bit ARGB 影像轉換成 8 bits 灰階影像
@@ -91,10 +724,11 @@ void ImageProcess::trans2Gray(unsigned char *buffer32 , int width , int height, 
 
     unsigned char *pBuffer32 = buffer32;
     unsigned char *pBuffer8 = buffer8;
+    int bpp = widthEff / width;
 
     for( y = 0 ; y < height ; y++ , pBuffer32 += widthEff , pBuffer8 += width )
     {
-        for( x = 0 , k = 0 ; x < width ; x++ , k += 4)
+        for( x = 0 , k = 0 ; x < width ; x++ , k += bpp)
         {
             if( pBuffer32[k] > 128)
                 pBuffer8[x] = 255;//(pBuffer32[k] + pBuffer32[k+1] + pBuffer32[k+2]) / 3;
@@ -121,21 +755,40 @@ void ImageProcess::trans2RGB(unsigned char *buffer8 , int width , int height, in
 
     unsigned char *pBuffer32 = buffer32;
     unsigned char *pBuffer8 = buffer8;
+    int bpp = widthEff / width;
+
+    //qDebug() << "bpp " << bpp;
 
     for( y = 0 ; y < height ; y++ , pBuffer32 += widthEff , pBuffer8 += width )
     {
-        for( x = 0 , k = 0 ; x < width ; x++ , k += 4)
+        for( x = 0 , k = 0 ; x < width ; x++ , k += bpp )
         {
-           pBuffer32[k] = pBuffer32[k+1] = pBuffer32[k+2] = pBuffer8[x];
+           //pBuffer32[k] = pBuffer32[k+1] = pBuffer32[k+2]  = pBuffer32[k+3] = pBuffer8[x];
+
+            if( bpp == 4 || bpp == 3 )
+            {
+                pBuffer32[k] = pBuffer32[k+1] = pBuffer32[k+2]  = pBuffer32[k+3] = 255;
+                   if( pBuffer8[x] < 255 && pBuffer8[x] > 0 )
+                   {
+                        pBuffer32[k] = pBuffer8[x]*11%255+31;
+                        pBuffer32[k+1] = pBuffer8[x]*13%255+97;
+                        pBuffer32[k+2] = pBuffer8[x]*31%255+43;
+                   }
+                   else
+                   {
+                      // pBuffer32[k] = pBuffer32[k+1] = pBuffer32[k+2]  = pBuffer32[k+3] = pBuffer8[x];
+                   }
+            }
+            else
+            {
+                    pBuffer32[k] = pBuffer8[x];
+            }
+
         }
     }
 
 }
 
-void ImageProcess::horizontalEdge(unsigned char *buffer8,int width , int height )
-{
-
-}
 
 /**
      * 移除背景 noise
@@ -170,6 +823,7 @@ void ImageProcess::noiseRemove(unsigned char *buffer8 , int width , int height )
                {
                    pBufferTemp[x] = 255;
                }
+
            }
         }
     }
@@ -239,10 +893,10 @@ void ImageProcess::getMaxRegion(unsigned char *buffer8 , int width , int height 
      * @param int   height
      * @return vector<REGION_ENTRY> 記錄文字位置的 region vector
      */
-vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int width , int height )
+vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int width , int height , int *horizontal , int &top , int &bottom )
 {
    vector<REGION_ENTRY> charPositions;
-    int i;
+    int i,x,y;
 
     int *bufferINT8 = new int[width*height];
     for( i = 0 ; i < width * height ; i++ )
@@ -250,20 +904,118 @@ vector<REGION_ENTRY> ImageProcess::getCharPosition( unsigned char *buffer8 , int
         bufferINT8[i] = 255 - buffer8[i];
     }
 
+    //qDebug() << "filter size "<<height*height/1024;
     charPositions = connectedComponent(bufferINT8,width,height,height*height/128);//128為大約估算值,沒意義
 
+    top = height;
+    bottom = 0;
+    int left = width;
+    int right = 0;
+    int index = -1;
+    int maxArea = 0;
     for( i = 0 ; i < charPositions.size() ; i++ )
     {
-            int width = abs(charPositions.at(i).right - charPositions.at(i).left) + 1;
-            int height = abs(charPositions.at(i).bottom - charPositions.at(i).top) + 1;
+            int wordWidth = abs(charPositions.at(i).right - charPositions.at(i).left) + 1;
+            int wordHeight = abs(charPositions.at(i).bottom - charPositions.at(i).top) + 1;
 
-            if( width > height )
+            if( wordWidth > wordHeight || (wordHeight < height / 4) )
             {
                 charPositions.at(i).IsRegion = false;
+            }
+            else
+            {
+                if( maxArea < charPositions.at(i).size )
+                {
+                    index = i;
+                    maxArea = charPositions.at(i).size;
+                }
+
+                if( charPositions.at(i).left < left )
+                    left = charPositions.at(i).left;
+                if( charPositions.at(i).right > right )
+                    right = charPositions.at(i).right;
             }
 
             //qDebug() << i << charPositions.at(i).IsRegion << charPositions.at(i).size << width * height;
     }
+
+    if(index != -1)
+    {
+        top = charPositions.at(index).top;
+        bottom = charPositions.at(index).bottom;
+    }
+
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        //bufferINT8[i] = 255 - buffer8[i];
+    }
+
+    int *pBufferINT8 = bufferINT8 + width + 1;
+    unsigned char *pBuffer8 = buffer8 + width  + 1;
+    //int *horizontal = new int[width];
+    memset(horizontal,0,sizeof(int)*width);
+    int *vertical = new int[height];
+    memset(vertical,0,sizeof(int)*height);
+
+    for( y = 1 ; y < height - 1 ; y++ , pBufferINT8 += width , pBuffer8 += width )
+    {
+        for( x = 1 ; x < width - 1 ; x++ )
+        {
+            int index = pBufferINT8[x];
+            if( index < charPositions.size() )
+            {
+                //目前有問題, 似乎label錯誤
+                if( !charPositions.at(index).IsRegion )
+                {
+                    //pBuffer8[x] = 255;
+                }
+            }
+            if( x < left || x > right )
+            {
+                pBuffer8[x] = 255;
+                pBufferINT8[x] = 0;
+            }
+
+            if( y < top || y > bottom )
+            {
+                pBuffer8[x] = 255;
+                pBufferINT8[x] = 0;
+            }
+            else
+            {
+                horizontal[x] += pBufferINT8[x];
+                vertical[y] += pBuffer8[x] - pBuffer8[x-width];
+            }
+
+        }
+    }
+
+    for( i = 0 ; i < width * height ; i++ )
+    {
+        bufferINT8[i] = 255 - buffer8[i];
+    }
+    charPositions.clear();
+    charPositions = connectedComponent(bufferINT8,width,height,height*height/128);//128為大約估算值,沒意義
+
+    for( i = 0 ; i < charPositions.size() ; i++ )
+    {
+            int wordWidth = abs(charPositions.at(i).right - charPositions.at(i).left) + 1;
+            int wordHeight = abs(charPositions.at(i).bottom - charPositions.at(i).top) + 1;
+
+            if( wordWidth > wordHeight || (wordHeight < height / 4) )
+            {
+                charPositions.at(i).IsRegion = false;
+            }
+    }
+
+    //qDebug() << top << bottom;
+                /**/
+    for( x = 0 ; x < width ; x++ )
+    {
+       // qDebug() << horizontal[x];
+    }
+
+    SAFE_RELEASE(bufferINT8);
 
     return charPositions;
 }
@@ -370,7 +1122,7 @@ vector<REGION_ENTRY> ImageProcess::connectedComponent(int *buffer8, int width, i
     index = k;
 
     if( index > 1 )
-        secondPass(bufferTemp ,  width ,  height , index , parent,  regionList , minSize );
+        secondPass(bufferTemp ,buffer8 ,  width ,  height , index , parent,  regionList , minSize );
 
     SAFE_RELEASE(bufferTemp);
     SAFE_RELEASE(parent);
@@ -378,7 +1130,7 @@ vector<REGION_ENTRY> ImageProcess::connectedComponent(int *buffer8, int width, i
     return regionList;
 }
 
-void ImageProcess::secondPass(int *bufferINT , int width , int height , int labelCounter , int *parent,  vector<REGION_ENTRY> &regionList , int minSize )
+void ImageProcess::secondPass(int *bufferINT , int *buffer8 , int width , int height , int labelCounter , int *parent,  vector<REGION_ENTRY> &regionList , int minSize )
 {
     int i,j,k;
     int *counter = new int[labelCounter];
@@ -423,10 +1175,10 @@ void ImageProcess::secondPass(int *bufferINT , int width , int height , int labe
     }
 
     pBufferTemp = bufferINT;
-    //pBuffer8 = buffer8;
+    int *pBuffer8 = buffer8;
     //index = k;
 
-    for( i = 0 ; i < height ; i++ , pBufferTemp += width )//, pBuffer8 += width
+    for( i = 0 ; i < height ; i++ , pBufferTemp += width, pBuffer8 += width )//
     {
         for( j = 0 ; j < width ; j++ )
         {
@@ -449,20 +1201,21 @@ void ImageProcess::secondPass(int *bufferINT , int width , int height , int labe
                     if(regionList.at(k).left > j)
                         regionList.at(k).left = j;
 
-                   // pBuffer8[j] = parent[a];
-                }
-               //else
-                   // pBuffer8[j] = 0;
+                   pBuffer8[j] = parent[index];
+               }
+               else
+                   pBuffer8[j] = 0;
             }
-            //else
-                //pBuffer8[j] = 0;
+            else
+                pBuffer8[j] = 0;
         }
     }
 
     for( i = 0 ; i < regionList.size() ; i++ )
     {
-        regionList.at(k).cx /= regionList.at(k).size;
-        regionList.at(k).cy /= regionList.at(k).size;
+        regionList.at(i).cx /= regionList.at(i).size;
+        regionList.at(i).cy /= regionList.at(i).size;
+        //qDebug() << "c"<< i << regionList.at(i).left << regionList.at(i).top << regionList.at(i).right << regionList.at(i).bottom;
     }
 
 

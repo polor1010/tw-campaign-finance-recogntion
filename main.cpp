@@ -2,7 +2,7 @@
 #include <QApplication>
 
 //#define GUI_MODE
-//#define UNIT_TEST
+#define UNIT_TEST
 
 int main(int argc, char *argv[])
 {
@@ -19,21 +19,49 @@ int main(int argc, char *argv[])
 
     return a.exec();
 #else
+    if( argc < 2 )
+    {
+         printf("input error..\n");
+         return 0;
+    }
+    QString imagePath = argv[1];
 
     RegionRecognition regionRecognition;
-    if( regionRecognition.readJsonFile(argv[2]) )
+
+    int i;
+    for( i = 2; i < argc ; i++ )
     {
-        if( regionRecognition.getRegionRecognitions(argv[1]) )
+        if( argv[i] == "-m" )
         {
-            regionRecognition.writeJsonFile(argv[3]);
-            printf("recognition finish : %s\n",argv[1]);
+
         }
-        else
+        if( argv[i] == "-d" )
         {
-            printf("recognition error : %s\n",argv[1]);
+            regionRecognition.setDenoise(true);
+        }
+        if( argv[i] == "-s" )
+        {
+            regionRecognition.setDeskew(false);
         }
     }
 
+    if( regionRecognition.getRegions(imagePath) )
+    {
+        if( regionRecognition.getRegionRecognitions(imagePath) )
+        {
+            printf("recognition finish : %s\n",imagePath.toLocal8Bit().data());
+
+            int fileNameLength = imagePath.length();
+            QString outJsonPath = imagePath.replace(fileNameLength-4,4,".json");
+            regionRecognition.writeJsonFile(outJsonPath);
+
+            printf("write json file : %s\n",outJsonPath.toLocal8Bit().data());
+        }
+    }
+    else
+    {
+        printf("recognition error : %s\n",imagePath.toLocal8Bit().data());
+    }
 
     return 0;
 #endif
