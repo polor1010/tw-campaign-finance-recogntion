@@ -7,16 +7,17 @@
 5. 文字定位
 6. 辨識
 7. json file 輸出
-
-   inverse:影像是否上下相反, theta:傾斜角度, left_top:左上角座標, right_down:右下角座標, result:辨識結果
+   
+   (inverse:影像是否上下相反, theta:傾斜角度, left_top:左上角座標, right_down:右下角座標, result:辨識結果)
    
 
 執行方法 : 
 
 1. 執行檔要和 database 資料夾放在同一個路徑
 2. ./CharRecognition 'imagePath'
-   如果要關掉歪斜校正後面加上 "-s"
-   如果要啟動去除雜訊後面加上 "-d"
+
+   (如果要關掉歪斜校正後面加上 "-s")
+   (如果要啟動去除雜訊後面加上 "-d")
 
 - 有些圖檔看起來是因為想要減少浮水印, 所以掃描的圖檔顏色比較淡, 這時候就不需要去 denoise
   如果 denoise 會造成文字斷裂反而辨識結果更糟, 目前去 denoise default 為 false
