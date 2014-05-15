@@ -7,6 +7,7 @@
 5. 文字定位
 6. 辨識
 7. json file 輸出
+
    inverse:影像是否上下相反, theta:傾斜角度, left_top:左上角座標, right_down:右下角座標, result:辨識結果
    
 
