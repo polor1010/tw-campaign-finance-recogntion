@@ -32,7 +32,7 @@
 
 新增 imageSpliter 子專案 :
 用來處理多張合並列印的圖, 並將分割結果依序儲存下來
-
+執行方法 ./ImageSpliter 'imagePath'
 
 授權方式 MIT: http://g0v.mit-license.org
 
