@@ -4,6 +4,11 @@
 
 #define LINE_WIDTH 10
 
+bool regionCompareSize(const REGION_ENTRY &left, const REGION_ENTRY &right)
+{
+    return left.size > right.size;
+}
+
 
 bool tableLineCompareFitCounter(const TABLE_LINE &left, const TABLE_LINE &right)
 {
@@ -882,6 +887,95 @@ void ImageProcess::getMaxRegion(unsigned char *buffer8 , int width , int height 
                 pBuffer8[x] = 255;
         }
     }
+
+}
+
+void ImageProcess::getWordBounderH(unsigned char *buffer8 , int width , int height)
+{
+
+    int x,y;
+
+    unsigned char *pBuffer8 = buffer8;
+
+    int *horizontalHistogram = new int[height];
+    memset(horizontalHistogram,0,sizeof(int)*height);
+
+    int center = (height + 1) / 2;
+    int stepH = height/8;
+
+    for( y = 0 ; y < height ; y++ , pBuffer8 += width )
+    {
+        for( x = 0 ; x < width ; x++ )
+        {
+            if( pBuffer8[x] == 0 )
+            {
+                horizontalHistogram[y]++;
+            }
+        }
+    }
+
+    int topBounder = center - stepH;
+    float ratioTop = 0.0;
+    int topIndex = 0;
+
+    int botttomBounder = center + stepH;
+    float ratioBottom = 0.0;
+    int bottomIndex = 0;
+
+    for( y = 0 ; y < height - 1 ; y++ )
+    {
+        if( y < topBounder )
+        {
+            float ratioT = (float)horizontalHistogram[y+1]/(float)horizontalHistogram[y];
+            if( ratioT > ratioTop )
+            {
+                ratioTop = ratioT;
+                topIndex = y;
+            }
+
+            //qDebug() << y << horizontalHistogram[y] << ratioT;
+        }
+
+        if( y > botttomBounder )
+        {
+            float ratioB = (float)horizontalHistogram[y]/(float)horizontalHistogram[y+1];
+            if( ratioB > ratioBottom )
+            {
+                ratioBottom = ratioB;
+                bottomIndex = y;
+            }
+
+            //qDebug() << y << horizontalHistogram[y] << ratioB;
+        }
+    }
+
+    qDebug() << "top" << topIndex << "bottom" << bottomIndex;
+
+
+    int *verticalHistogram = new int[width];
+    memset(verticalHistogram,0,sizeof(int)*width);
+
+    pBuffer8 = buffer8;
+
+    for( y = 0 ; y < height ; y++ , pBuffer8 += width )
+    {
+        for( x = 0 ; x < width ; x++ )
+        {
+            if( y >= topIndex && y <= bottomIndex )
+            {
+                if( pBuffer8[x] == 0 )
+                verticalHistogram[x]++;
+            }
+        }
+    }
+
+    for( x = 0 ; x < width ; x++ )
+    {
+        qDebug() << x << verticalHistogram[x];
+    }
+
+    SAFE_RELEASE(horizontalHistogram);
+    SAFE_RELEASE(verticalHistogram);
 
 }
 

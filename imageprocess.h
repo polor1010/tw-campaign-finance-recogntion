@@ -49,6 +49,8 @@ enum CORNER_TYPE
     RIGHT_BOTTOM
 };
 
+bool regionCompareSize(const REGION_ENTRY &left, const REGION_ENTRY &right);
+
 class ImageProcess
 {
 
@@ -75,6 +77,8 @@ public:
     void getCornerPoints(vector<REGION_ENTRY> &regions,vector<Point> &points , CORNER_TYPE type );
     void sortCorner(vector<Point> &points);
     bool isReverse(unsigned char *buffer8 , int width , int height , int top, int bottom);
+    void getWordBounderH(unsigned char *buffer8 , int width , int height);
+
 };
 
 #endif // IMAGEPROCESS_H

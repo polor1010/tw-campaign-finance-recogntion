@@ -93,7 +93,7 @@ void MainWindow::processRegionImage()
     qDebug() << image.bytesPerLine();
     qDebug() << image.bitPlaneCount();
 
-    regionRecognition.processImage(image);
+    regionRecognition.processImageChinese(image);
 
     regionRecognition.drawInfo(image);
     //int fileNameLength = filePath.length();

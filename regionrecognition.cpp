@@ -11,11 +11,6 @@
 #include <QJsonArray>
 #include <math.h>
 
-bool regionCompareSize(const REGION_ENTRY &left, const REGION_ENTRY &right)
-{
-    return left.size > right.size;
-}
-
 
 RegionRecognition::RegionRecognition()
 {
@@ -215,26 +210,26 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
         int column = tableRegions.at(i).column;
         int row = tableRegions.at(i).row;
 
+        QImage regionImage = QImage(width,height,QImage::Format_ARGB32);
+        unsigned char *regionBuffer = regionImage.bits();
+        unsigned char *pRegionBuffer = regionBuffer;
+        int regionWidthEff = regionImage.bytesPerLine();
+
+        unsigned char *pBuffer24 = buffer24 + posY * widthEff + posX * bytePerPixel;
+        for( y = 0 ; y < height ; y++ , pBuffer24 += widthEff , pRegionBuffer += regionWidthEff )
+        {
+            for( x = 0 , k = 0; x < width ; x++ , k += 4)
+            {
+                pRegionBuffer[k] =
+                pRegionBuffer[k+1] =
+                pRegionBuffer[k+2] = pBuffer24[x*bytePerPixel];
+            }
+        }
+
         //只辨識 row 0:序號 1:日期 6:支出金額
         if( row > 1  && (column == 1 || column == 2|| column == 6 || column == 7))
         //if( row > 1  && (column == 4))
         {
-            QImage regionImage = QImage(width,height,QImage::Format_ARGB32);
-            unsigned char *regionBuffer = regionImage.bits();
-            unsigned char *pRegionBuffer = regionBuffer;
-            int regionWidthEff = regionImage.bytesPerLine();
-
-            unsigned char *pBuffer24 = buffer24 + posY * widthEff + posX * bytePerPixel;
-            for( y = 0 ; y < height ; y++ , pBuffer24 += widthEff , pRegionBuffer += regionWidthEff )
-            {
-                for( x = 0 , k = 0; x < width ; x++ , k += 4)
-                {
-                    pRegionBuffer[k] =
-                    pRegionBuffer[k+1] =
-                    pRegionBuffer[k+2] = pBuffer24[x*bytePerPixel];
-                }
-            }
-
             if( patterns.size() > 0 )
             {
                 tableRegions.at(i).result = processImage(regionImage);
@@ -259,6 +254,17 @@ bool RegionRecognition::getRegionRecognitions(QString filePath)
             regionImage.save(filePath);
             counter++;
 #endif
+        }
+        else
+        {
+            /*
+            if( row > 1 )
+            {
+                QString filePath = QDir::currentPath() + "/"+ QString::number(row)+"_"+QString::number(column)+".jpg";
+                qDebug() << filePath;
+                regionImage.save(filePath);
+            }
+            */
         }
     }
 /*
@@ -444,11 +450,11 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
          noiseRemove(buffer8,width,height);
          noiseRemove(buffer8,width,height);
      }
-    // getMaxRegion(buffer8,width,height);
 
+     getWordBounderH(buffer8,width,height);
      //charPositions = getCharPosition(buffer8,width,height);
      //qDebug() << "char size" << charPositions.size();
-     trans2RGB(buffer8,width,height,widthEff,image.bits());
+     //trans2RGB(buffer8,width,height,widthEff,image.bits());
 
      //getRecognitions(buffer8,width);
 
@@ -478,8 +484,13 @@ void RegionRecognition::trans2Image(unsigned char *buffer8,int width,int height)
      memset(buffer8,0,sizeof(uchar)*width*height);
 
      trans2Gray(pBuffer,width,height,widthEff,buffer8);
-     //noiseRemove(buffer8,width,height);
-     //noiseRemove(buffer8,width,height);
+
+     if(isDenoise)
+     {
+        noiseRemove(buffer8,width,height);
+        noiseRemove(buffer8,width,height);
+     }
+
      getMaxRegion(buffer8,width,height);
 
      int *horizontal = new int[width];
